@@ -17,7 +17,7 @@
 | 4. Serve | Write **Hive** and/or **Snowflake** | Write **Iceberg** tables on S3 (Silver/Gold). Query via Athena / Spark |
 | 5. Schedule | Your Airflow / Control-M / etc. | Generated **Airflow (MWAA)** DAG |
 | 6. Quality | Your DQ checks (if any) | Generated quality rules + gates (Silver ≥80%, Gold ≥95%) |
-| 7. Who writes the code? | **You / your team** | **AI agents generate** it after you answer questions |
+| 7. Who writes the code? | **You / your team** (or already written — you only execute) | **AI agents generate** it after you answer questions |
 
 ### One-line difference
 
@@ -39,6 +39,90 @@ Spark runs              →      Agents generate Spark/Glue + DAG
 Write Hive / SF         →      Write Iceberg (default)
 You operate jobs        →      Same: scheduler runs jobs (no AI)
 ```
+
+---
+
+## Part 1b — “Our framework & code already exist — we only execute. Then what?”
+
+This is the common case on mature teams. **Point 7 in the table is about who creates code for a *new* source**, not about nightly runs.
+
+### Two different moments (do not mix them)
+
+| Moment | What happens today | What ADOP does |
+|--------|--------------------|----------------|
+| **A. Build time** (new dataset / new rules) | Someone once wrote Spark jobs + configs | ADOP’s AI **helps create** that package (if you use it) |
+| **B. Run time** (every day) | Scheduler **only executes** existing jobs | **Same** — scheduler executes jobs; **AI is not involved** |
+
+If your world is already **only B** (framework + code there, you just run):
+
+```text
+S3 files arrive
+    → your scheduler triggers your Spark job
+    → writes Hive / Snowflake / Iceberg
+    → done
+
+No Claude. No ADOP agents. No “prompt”.
+Just execute — exactly like today.
+```
+
+**ADOP does not sit in the middle of daily execution.**  
+It does not replace your runner. It does not re-generate code every night.
+
+### So what will happen if you “use ADOP” when code already exists?
+
+Depends what you ask for:
+
+| What you want | What happens |
+|---------------|--------------|
+| **Just run today’s files** (business as usual) | **Nothing changes.** Keep using your framework. You do **not** need ADOP for execution. |
+| **Onboard a brand-new file type / source** | ADOP can **generate new** jobs/configs (or drafts). You review, then plug into **your** framework / Iceberg path, then execute as usual. |
+| **Change rules** (new PK, new mask, new Gold KPI) | Either change your existing config/jobs **manually**, or ask ADOP to **propose/update** a workload — then you still **execute** via your scheduler. |
+| **Point ADOP at an existing workload folder** | Router says “already found” → you can modify or leave it; daily run still = execute only. |
+
+### Plain answer to your question
+
+> “We are not writing code anymore; we just execute. Then what will happen with point 7 / ADOP?”
+
+**At execute time: the same thing that happens today.**  
+Jobs run. Data lands in Iceberg/Hive/SF. No AI.
+
+**Point 7 only matters when someone would have had to write (or copy) new pipeline code.**  
+- If that work is **already done** → point 7 is in the past; ADOP is idle unless you start a *new* onboard or a *change*.  
+- If tomorrow a **new** CSV/EBCDIC source appears → without ADOP a human writes code; with ADOP the agent drafts it, then you go back to **execute-only**.
+
+### Picture
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│  ONE-TIME / WHEN THINGS CHANGE (optional ADOP)          │
+│  Prompt → questions → generate/update code → review     │
+│  → commit into YOUR framework repo / ADOP workloads/    │
+└──────────────────────────┬──────────────────────────────┘
+                           │ once approved
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  EVERY DAY (your world today — ADOP not needed)         │
+│  S3 drop → execute Spark → Iceberg / Hive / SF          │
+│  No prompts. No agents. Only the framework runs.        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### When ADOP is still useful even if you “only execute”
+
+You still execute daily — but ADOP can help **before** that, when:
+
+1. New source on S3 (CSV/EBCDIC) needs a **new** pipeline wired for Iceberg.  
+2. You want **faster drafting** of configs/quality/schedule, then you adapt to your framework and execute.  
+3. You want **documentation + tests + DQ templates** generated, not hand-written.  
+
+If **no new sources and no rule changes** — you can ignore ADOP completely and keep executing.
+
+### What ADOP will *not* do in an execute-only shop
+
+- It will not auto-run every file that lands on S3 by itself (unless you deployed generated DAGs and scheduled them).  
+- It will not replace your existing Spark framework at runtime.  
+- It will not rewrite your old jobs unless you ask.  
+- Chat with the agent is **not** part of production execution.
 
 ---
 
@@ -427,6 +511,7 @@ Your framework supports Iceberg **and** you still use Hive/SF:
 | EBCDIC on S3 → Iceberg? | Yes if you provide layout/code page — see Part 5 |
 | Same as our Spark→Hive/SF framework? | Same *idea*; different default *landing* (Iceberg). Hybrid possible |
 | Do we still need humans? | Yes — for business rules, approvals, and Prod promotion |
+| Framework + code already exist; we only execute? | **Daily run unchanged** — scheduler executes jobs, no AI. ADOP only helps when you need a *new* or *changed* pipeline (see Part 1b) |
 
 ---
 
