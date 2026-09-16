@@ -1,0 +1,24 @@
+flowchart LR
+  subgraph DEV["Development only — AI agents run here"]
+    U[User request] --> DOA[Data Onboarding Agent]
+    DOA --> R[1 Router]
+    DOA --> M[2 Metadata]
+    DOA --> O[3 Ontology]
+    DOA --> Q[4 Quality]
+    DOA --> T[5 Transformation]
+    DOA --> D[6 Orchestration DAG]
+    DOA --> DV[7 DevOps]
+    R & M & O & Q & T & D & DV --> ART[Generated scripts + configs + tests]
+  end
+
+  ART --> GIT[Git version control]
+
+  subgraph CICD["CI/CD — no agents"]
+    GIT --> QA[QA]
+    QA --> STG[Staging]
+    STG --> PROD[Production]
+  end
+
+  subgraph PROD_RUN["Production — pipeline only"]
+    PROD --> RUN[Airflow / Glue / Iceberg run artifacts]
+  end

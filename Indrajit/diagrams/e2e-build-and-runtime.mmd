@@ -1,0 +1,30 @@
+flowchart TD
+  START([User: onboard dataset]) --> ROUTER{Router: workloads/}
+
+  ROUTER -->|Found| EXIST[Use / modify existing]
+  ROUTER -->|Partial| PART[Complete or restart]
+  ROUTER -->|Not found| P0
+
+  PART --> P0
+  EXIST --> P0
+
+  P0[Phase 0: AWS + MCP health] -->|Fail| SETUP[Environment Setup]
+  P0 -->|Pass| P1
+
+  P1[Phase 1: Human discovery answers] --> P2
+  P2[Phase 2: Dedup + plan approval] -->|No| P1
+  P2 -->|Yes| P3
+
+  P3[Phase 3: Profile + Metadata Agent + tests] --> CONFIRM{Human confirms?}
+  CONFIRM -->|No| P3
+  CONFIRM -->|Yes| P4
+
+  P4[Phase 4: Transform / Quality / DAG agents + test gates] --> APPROVE{Approve artifacts?}
+  APPROVE -->|No| P4
+  APPROVE -->|Yes| P5
+
+  P5[Phase 5: MCP deploy + verify] --> E2E{E2E test?}
+  E2E --> DEVOPS{DevOps offer?}
+  DEVOPS --> GIT[Commit to Git]
+  GIT --> PROMOTE[CI/CD QA → Staging → Prod]
+  PROMOTE --> RUN[Runtime: Bronze → Silver → Gold]
