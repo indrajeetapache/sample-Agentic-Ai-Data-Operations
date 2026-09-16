@@ -29,6 +29,15 @@ An **agentic data onboarding platform**: describe a dataset; specialized agents 
 5. “HIPAA workflow” ≠ audit-ready without LF-Tags, masking, and process.  
 6. Docs disagree on DevOps readiness / `implementation pending` status.
 
+## How do I use it as a user?
+
+See **`05_USER_ONBOARDING_GUIDE.md`** — setup → prompt → discovery answers → deploy → promote.
+
+Coming from **Spark → Hive/Snowflake** with files on S3 (CSV/EBCDIC) and Iceberg support?  
+See **`06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md`** — plain comparison, how to talk to the agent, copy-paste prompts.
+
+(Earlier Indrajit docs explained the system; usage + Spark/SF comparison are in `05_` and `06_`.)
+
 ## Folder map
 
-Start here → `01_CLAIMS_VERIFICATION.md` → `02_E2E_FLOW.md` → `03_PITFALLS_AND_GAPS.md` → `04_ARCHITECTURE_DEEP_DIVE.md` → drop PNGs in `diagrams/`.
+Start here → `06_` (your stack comparison + prompts) → `05_` (usage) → `01_`–`04_` (analysis) → drop PNGs in `diagrams/`.
