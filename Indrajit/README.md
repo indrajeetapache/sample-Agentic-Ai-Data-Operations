@@ -17,6 +17,7 @@ Analysis workspace for understanding **sample-Agentic-Ai-Data-Operations** (ADOP
 | [04_ARCHITECTURE_DEEP_DIVE.md](./04_ARCHITECTURE_DEEP_DIVE.md) | Agents, zones, codegen, MCP, security model |
 | [05_USER_ONBOARDING_GUIDE.md](./05_USER_ONBOARDING_GUIDE.md) | **How a user sets up, onboard, answers questions, deploys, promotes** |
 | [06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md](./06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md) | **Layman: your Spark→Hive/SF vs ADOP; how to ask; CSV & EBCDIC→Iceberg prompts** |
+| [07_E2E_PLAN_COST_CONFIG.md](./07_E2E_PLAN_COST_CONFIG.md) | **E2E plan: who processes, who pays (Claude vs AWS), where/how to configure** |
 | [diagrams/](./diagrams/) | Mermaid sources — drop PNGs here when you export |
 
 ## How to add your diagram

@@ -34,10 +34,11 @@ An **agentic data onboarding platform**: describe a dataset; specialized agents 
 See **`05_USER_ONBOARDING_GUIDE.md`** — setup → prompt → discovery answers → deploy → promote.
 
 Coming from **Spark → Hive/Snowflake** with files on S3 (CSV/EBCDIC) and Iceberg support?  
-See **`06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md`** — plain comparison, how to talk to the agent, copy-paste prompts.
+See **`06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md`**.
 
-(Earlier Indrajit docs explained the system; usage + Spark/SF comparison are in `05_` and `06_`.)
+**Who runs Claude, who pays, where to configure, full E2E plan?**  
+See **`07_E2E_PLAN_COST_CONFIG.md`** (this was the missing piece from the early “end to end plan” ask).
 
 ## Folder map
 
-Start here → `06_` (your stack comparison + prompts) → `05_` (usage) → `01_`–`04_` (analysis) → drop PNGs in `diagrams/`.
+Start here → `07_` (cost/config/E2E plan) → `06_` (your stack) → `05_` (usage) → `01_`–`04_` (analysis) → `diagrams/`.
