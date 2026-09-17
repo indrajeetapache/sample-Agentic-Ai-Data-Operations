@@ -36,8 +36,8 @@ See **`05_USER_ONBOARDING_GUIDE.md`** — setup → prompt → discovery answers
 Coming from **Spark → Hive/Snowflake** with files on S3 (CSV/EBCDIC) and Iceberg support?  
 See **`06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md`**.
 
-**Who runs Claude, who pays, where to configure, full E2E plan?**  
-See **`07_E2E_PLAN_COST_CONFIG.md`** (this was the missing piece from the early “end to end plan” ask).
+**Who runs Claude, who pays, where to configure, how to configure agents, full E2E plan?**  
+See **`07_E2E_PLAN_COST_CONFIG.md`** — Section **3.B** is the open-source agent config file map.
 
 ## Folder map
 

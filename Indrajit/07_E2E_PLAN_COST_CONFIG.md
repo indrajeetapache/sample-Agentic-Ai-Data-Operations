@@ -119,7 +119,180 @@ There are **separate bills**. Do not mix them.
 
 **This repo does not put your Anthropic key in `.mcp.json`.** MCP is for **AWS tools**, not for paying Claude.
 
-### B. AWS access for agents (Bill B – Dev)
+### B. How to configure **agents** in this open-source repo (file-by-file)
+
+There is **no separate “agent UI” or `agents.yaml` with a start button**.  
+Agents are configured by editing **markdown skills/commands**, **Claude Code settings/hooks**, **MCP JSON**, and **policy/registry YAML**. Claude Code reads those files when you open this repo.
+
+#### Big picture — what controls what
+
+```text
+You open this repo in Claude Code
+        │
+        ├─ CLAUDE.md + .claude/rules/*     → hard rules (human gate, security)
+        ├─ SKILLS.md                       → what each agent is allowed to do / how it behaves
+        ├─ prompts/**                      → copy-paste playbooks (env setup, onboard, regulation)
+        ├─ .claude/commands/*.md           → slash commands (/onboard-workflow, /devops-workflow)
+        │                                    ★ THIS is where model = haiku/sonnet/opus is set
+        ├─ .claude/settings.json + hooks/  → gates (discovery, codegen, logging)
+        ├─ .mcp.json                       → which AWS tools agents can call
+        ├─ tool-registry/* + TOOL_ROUTING.md → which tool for which intent
+        ├─ shared/policies/**/*.cedar      → authorization / guardrails (Cedar)
+        └─ workloads/<name>/config/*       → per-dataset output (after generation)
+```
+
+#### 1) Configure which agents exist and how they behave
+
+| Goal | File(s) | How |
+|------|---------|-----|
+| Master agent playbooks (Router, Onboarding, Metadata, Transform, Quality, DAG, …) | **`SKILLS.md`** | Edit the skill section for that agent (phases, spawn prompts, constraints). This is the main “agent brain” text. |
+| Project-wide non-negotiables | **`CLAUDE.md`** | Human-in-the-loop gate, security, zones, codegen rules. Change only if you know impact. |
+| Zone discovery questions | **`.claude/rules/00-zone-questions.md`** | What the agent must ask for Bronze/Silver/Gold. |
+| Architecture / Python / SQL / quality / logging conventions | **`.claude/rules/02-*.md` … `09-*.md`** | Path-scoped rules Claude Code loads automatically. |
+| Runnable prompt packs (setup, onboard, govern, regulation) | **`prompts/environment-setup-agent/`**, **`prompts/data-onboarding-agent/`**, **`prompts/devops-agent/`**, **`prompts/data-onboarding-agent/regulation/`** | Edit or add markdown prompts users paste; regulation files change compliance behavior. |
+
+**Practical tip:** To change “what Metadata Agent does,” edit its section in `SKILLS.md` and keep matching spawn text in `.claude/commands/onboard-workflow.md` / onboarding prompts in sync.
+
+#### 2) Configure models (haiku / sonnet / opus) and parallel workflow
+
+| Goal | File | How |
+|------|------|-----|
+| `/onboard-workflow` model routing | **`.claude/commands/onboard-workflow.md`** | Search for `model: 'haiku'|'sonnet'|'opus'` and `REGULATIONS_REQUIRING_OPUS` / `getBuildModel()`. Example: HIPAA/SOX/PCI → Opus for build; else Sonnet. Adversarial/verify stay Opus. |
+| `/devops-workflow` models | **`.claude/commands/devops-workflow.md`** | Same pattern — health=haiku, generate=sonnet, security review=opus. |
+| Force cheaper models for all builds | Edit those command files | Change `opus` → `sonnet` (or `haiku` for checks only). **Tradeoff:** lower Bill A, weaker compliance review. |
+| Slash command tool permissions | Frontmatter of same `.md` files | `allowed-tools: ...` at top of command file. |
+
+Example (concept) inside `onboard-workflow.md`:
+
+```javascript
+// Build model by regulation — EDIT THIS LIST to change who gets Opus
+const REGULATIONS_REQUIRING_OPUS = ['HIPAA', 'SOX', 'PCI']
+
+function getBuildModel(regulation) {
+  // return 'sonnet'  // ← uncomment-style change: force cheaper builds
+  return regs.some(r => REGULATIONS_REQUIRING_OPUS.includes(r)) ? 'opus' : 'sonnet'
+}
+
+await agent(`...prompt...`, { model: 'haiku', label: 'health:...' })
+await agent(`...prompt...`, { model: BUILD_MODEL, label: 'transform:...' })
+```
+
+Sequential mode (paste “Onboard …” without `/onboard-workflow`) uses the **main chat model** you selected in Claude Code — not the workflow script’s per-agent map.
+
+#### 3) Configure Claude Code hooks / safety gates
+
+| Goal | File | How |
+|------|------|-----|
+| Enable/disable hooks | **`.claude/settings.json`** | Lists PreToolUse / PostToolUse hooks. |
+| Block writes until discovery answered | **`.claude/hooks/check-discovery-gate.sh`** | Enforces human gate. |
+| Force template codegen (no free-form script edits) | **`.claude/hooks/enforce_template_codegen.py`** | Blocks Write/Edit under scripts/dags/sql without renderer token. |
+| Require logging patterns | **`.claude/hooks/check-logging.sh`** | Logging discipline. |
+| Log Q&A | **`.claude/hooks/log_conversation.py`** | Trace capture on AskUserQuestion. |
+
+To “loosen” gates for a private fork: edit or remove hook entries in `.claude/settings.json` (not recommended for Prod-like discipline).
+
+#### 4) Configure AWS tools the agents can call (MCP)
+
+| Goal | File | How |
+|------|------|-----|
+| Wire MCP servers Claude Code loads | **`.mcp.json`** (repo root) | Set `AWS_REGION`, `AWS_PROFILE` per server; add/remove servers. |
+| Cloud MCP instead of laptop | Copy/use **`.mcp.gateway.json`** → as `.mcp.json` | After AgentCore Gateway deploy. |
+| Canonical server list + REQUIRED/WARN/OPTIONAL | **`tool-registry/servers.yaml`** | Keep in sync with `.mcp.json`; validate with `python scripts/validate_tool_registry.py`. |
+| Hard rules (MCP-first, no secrets, bronze immutable…) | **`tool-registry/invariants.yaml`** | Change severity/rules carefully. |
+| Intent → which tool | **`TOOL_ROUTING.md`** | Add/change routing phrases and `not_when` conditions. |
+| Per-phase allowed tools | **`MCP_GUARDRAILS.md`** | What may be called in Phase 0–5. |
+| Custom MCP server code | **`mcp-servers/*/server.py`** | Extend Glue/Athena/LF/PII tools. |
+
+Minimal local config example (edit every server’s `env` block the same way):
+
+```json
+"env": {
+  "AWS_REGION": "ap-south-1",
+  "AWS_PROFILE": "adop-dev"
+}
+```
+
+Then:
+
+```bash
+aws sts get-caller-identity --profile adop-dev
+claude mcp list
+```
+
+#### 5) Configure agent authorization / guardrails (Cedar policies)
+
+| Goal | File | How |
+|------|------|-----|
+| Who may do what (onboarding vs sub-agents) | **`shared/policies/agent_authorization/*.cedar`** | e.g. `onboarding_agent.cedar` = main conversation full access; sub-agents more limited. |
+| Quality / security / immutability guards | **`shared/policies/guardrails/*.cedar`** | e.g. quality gate threshold, PII masking, bronze immutability. |
+| Schema for policies | **`shared/policies/schema.cedarschema`** | When adding principals/actions. |
+
+Sub-agents are designed for **file generation only** (no MCP) — that split is policy + skill text, not a GUI toggle.
+
+#### 6) Configure codegen templates (what agents emit)
+
+| Goal | File | How |
+|------|------|-----|
+| Spec shapes | **`contracts/v1/*.schema.json`** | Extend fields → bump carefully. |
+| Jinja templates for Glue/DAG/SQL/quality | **`shared/templates/*.j2`** | Change generated Spark/Glue/Airflow shape to closer match your framework. |
+| Renderer | **`shared/codegen/`** | Spec → template → artifact. |
+| Account topology defaults | **`shared/templates/account_topology.yaml`** | Single vs multi-account hints. |
+
+**For your Spark→Iceberg shop:** the highest-leverage OSS customization is often **templates + contracts**, so drafts look like your framework — not rewriting every agent skill.
+
+#### 7) Configure a single workload (after/during onboard)
+
+| Goal | File |
+|------|------|
+| Source / schema / PII | `workloads/<name>/config/source.yaml` |
+| Transforms | `.../transformations.yaml` or silver/gold yaml |
+| Quality | `.../quality_rules.yaml` |
+| Schedule | `.../schedule.yaml` |
+| Semantic / ontology (optional) | `.../semantic.yaml`, `ontology.ttl`, `mappings.ttl` |
+
+#### 8) Step-by-step: “I forked this OSS — how do I configure agents?”
+
+1. **Clone / open repo in Claude Code** (agents are prompt-driven here).  
+2. **Bill A:** log in to Claude / set API access (not in git).  
+3. **Bill B Dev:** `~/.aws` profile; edit **`.mcp.json`** region + profile.  
+4. **Validate tools:** `claude mcp list` + optional `python scripts/validate_tool_registry.py`.  
+5. **One-time AWS lake:** run prompts under `prompts/environment-setup-agent/`.  
+6. **Tune agent behavior (optional):**  
+   - Cheaper models → edit **`.claude/commands/onboard-workflow.md`**  
+   - Different questions → **`.claude/rules/00-zone-questions.md`** / **`SKILLS.md`**  
+   - Closer to your Spark jobs → **`shared/templates/*.j2`** + **`contracts/v1/`**  
+   - Compliance defaults → **`prompts/data-onboarding-agent/regulation/`**  
+7. **Run:** paste onboard prompt or `/onboard-workflow HIPAA`.  
+8. **Per dataset:** review/edit `workloads/<name>/config/`, then adapt into your framework and execute.
+
+#### 9) What you typically should *not* configure for day-1
+
+| Avoid at first | Why |
+|----------------|-----|
+| Deleting human-gate hooks | Agents will invent PK/PII/schedule |
+| Putting Anthropic keys in `.mcp.json` | Wrong file; security risk |
+| Editing generated `scripts/` by hand | Drift validator / hooks fight you — change templates/specs |
+| Pointing MCP at **Prod** AWS | Design is Dev-only agents |
+
+#### 10) Quick reference — “I want X → edit Y”
+
+| I want to… | Edit this |
+|------------|-----------|
+| Change AWS region/profile for agents | `.mcp.json` |
+| Use cheaper models in parallel onboard | `.claude/commands/onboard-workflow.md` |
+| Change discovery questions | `.claude/rules/00-zone-questions.md` |
+| Change agent responsibilities / spawn prompts | `SKILLS.md` |
+| Change HIPAA/GDPR default controls | `prompts/data-onboarding-agent/regulation/*.md` |
+| Make generated Spark look like our framework | `shared/templates/*.j2` + `contracts/v1/` |
+| Add/remove AWS tools | `.mcp.json` + `tool-registry/servers.yaml` |
+| Change tool choice rules | `TOOL_ROUTING.md`, `MCP_GUARDRAILS.md` |
+| Loosen/tighten quality gate policy | `shared/policies/guardrails/dq_*.cedar` |
+| Change slash-command workflow | `.claude/commands/onboard-workflow.md` or `devops-workflow.md` |
+| Turn hooks on/off | `.claude/settings.json` |
+
+---
+
+### C. AWS access for agents (Bill B – Dev)
 
 | What | Where | What to set |
 |------|-------|-------------|
@@ -129,7 +302,7 @@ There are **separate bills**. Do not mix them.
 | MCP local vs Gateway | `.mcp.json` vs `.mcp.gateway.json` | Local = laptop stdio; Gateway = AgentCore in AWS |
 | Verify MCP | Terminal: `claude mcp list` | All REQUIRED servers up |
 
-### C. Platform infra (one-time)
+### D. Platform infra (one-time)
 
 | What | Where | How |
 |------|-------|-----|
@@ -137,7 +310,7 @@ There are **separate bills**. Do not mix them.
 | Detailed checklist | `docs/aws-account-setup.md` | Follow once per account |
 | Airflow variables | MWAA / Airflow UI | Refs only — no secrets in plain text |
 
-### D. Per-dataset pipeline config (after generate)
+### E. Per-dataset pipeline config (after generate)
 
 | What | Where |
 |------|-------|
@@ -150,7 +323,7 @@ There are **separate bills**. Do not mix them.
 
 Prefer changing YAML/specs and re-generating over hand-editing rendered scripts (drift rules).
 
-### E. Secrets (never in prompts long-term)
+### F. Secrets (never in prompts long-term)
 
 | Secret | Where |
 |--------|-------|
@@ -224,11 +397,15 @@ Use this as the **project plan**, not only a tech demo.
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│ THIS REPO                                                   │
-│  • .mcp.json                 → AWS region, profile, MCP     │
-│  • prompts/                  → what to paste                │
-│  • .claude/commands/         → /onboard-workflow            │
-│  • workloads/<name>/config/  → per-dataset rules            │
+│ THIS REPO — AGENT CONFIG (no GUI; edit these files)         │
+│  • SKILLS.md / CLAUDE.md / .claude/rules/  → agent behavior │
+│  • .claude/commands/onboard-workflow.md    → models/flow    │
+│  • .claude/settings.json + hooks/          → safety gates   │
+│  • .mcp.json + tool-registry/              → AWS tools      │
+│  • shared/templates/ + contracts/v1/       → generated code │
+│  • shared/policies/**/*.cedar              → auth/guards    │
+│  • prompts/**                              → paste playbooks│
+│  • workloads/<name>/config/                → per dataset    │
 └──────────────────────────┬──────────────────────────────────┘
                            │ MCP (build time)
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -241,7 +418,7 @@ Use this as the **project plan**, not only a tech demo.
 │ YOUR FRAMEWORK (execute)                                    │
 │  • Spark jobs + Iceberg (+ Hive/SF if needed)               │
 │  • Your scheduler            → Bill B (Prod/compute)        │
-│  • No Claude                                            │
+│  • No Claude                                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -264,8 +441,11 @@ A: Tell the agent in the prompt (S3 path); set region/profile in `.mcp.json` for
 **Q: We already have the framework — do we still configure all of this?**  
 A: Only if you want ADOP **drafting**. For execute-only days: no Claude config needed. For a pilot: configure Claude + Dev AWS MCP once.
 
+**Q: Where do I configure the agents themselves in this open-source project?**  
+A: There is no agent GUI. Edit **`SKILLS.md`** (behavior), **`.claude/commands/onboard-workflow.md`** (models/parallel flow), **`.mcp.json`** (AWS tools), **`.claude/settings.json`** (hooks), and optionally **`shared/templates/`** / **`contracts/v1/`**. Full map: Section **3.B** above.
+
 **Q: Was this documented before?**  
-A: Partially scattered in README cost section + `docs/mcp-setup.md`. **Not** as one E2E “who pays / where configure / plan” until this file (`07_`).
+A: Partially scattered in README cost section + `docs/mcp-setup.md`. **Not** as one E2E “who pays / where configure / how to configure agents” until this file (`07_`).
 
 ---
 
@@ -275,7 +455,7 @@ A: Partially scattered in README cost section + `docs/mcp-setup.md`. **Not** as 
 |-----|----------------|
 | `05_USER_ONBOARDING_GUIDE.md` | How to prompt / steps |
 | `06_SPARK_HIVE_SF_COMPARISON_AND_PROMPTS.md` | Your stack + 3 benefits + sample prompts |
-| **`07_` (this file)** | **Who processes, who pays, where configure, E2E plan** |
+| **`07_` (this file)** | **Who processes, who pays, where configure, how to configure agents (files), E2E plan** |
 | `02_E2E_FLOW.md` | Technical phase flow |
 | `03_PITFALLS_AND_GAPS.md` | Risks |
 
